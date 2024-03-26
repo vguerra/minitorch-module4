@@ -99,51 +99,67 @@ class Add(Function):
 class Mul(Function):
     @staticmethod
     def forward(ctx: Context, a: Tensor, b: Tensor) -> Tensor:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        ctx.save_for_backward(a, b)
+        return a.f.mul_zip(a, b)
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, Tensor]:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        a, b = ctx.saved_values
+        return grad_output.f.mul_zip(b, grad_output), grad_output.f.mul_zip(a, grad_output)
+
 
 
 class Sigmoid(Function):
     @staticmethod
     def forward(ctx: Context, t1: Tensor) -> Tensor:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        sig_mapped = t1.f.sigmoid_map(t1)
+        ctx.save_for_backward(sig_mapped)
+        return sig_mapped
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tensor:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        (sig_mapped,) = ctx.saved_values
+        f = grad_output.f
+        return f.mul_zip(
+            grad_output,
+            f.mul_zip(sig_mapped, f.add_zip(tensor([1.0]), f.neg_map(sig_mapped))))
 
 
 class ReLU(Function):
     @staticmethod
     def forward(ctx: Context, t1: Tensor) -> Tensor:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        ctx.save_for_backward(t1)
+        return t1.f.relu_map(t1)
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tensor:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        (t1, ) = ctx.saved_values
+        return grad_output.f.relu_back_zip(t1, grad_output)
 
 
 class Log(Function):
     @staticmethod
     def forward(ctx: Context, t1: Tensor) -> Tensor:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        ctx.save_for_backward(t1)
+        return t1.f.log_map(t1)
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tensor:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        (t1, ) = ctx.saved_values
+        return grad_output.f.log_back_zip(t1, grad_output)
 
 
 class Exp(Function):
     @staticmethod
     def forward(ctx: Context, t1: Tensor) -> Tensor:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        fwd = t1.f.exp_map(t1)
+        ctx.save_for_backward(fwd)
+        return fwd
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tensor:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        (fwd, ) = ctx.saved_values
+        return grad_output.f.mul_zip(fwd, grad_output)
 
 
 class Sum(Function):
@@ -170,37 +186,46 @@ class All(Function):
 class LT(Function):
     @staticmethod
     def forward(ctx: Context, a: Tensor, b: Tensor) -> Tensor:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        return a.f.lt_zip(a, b)
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, Tensor]:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        return grad_output.zeros(), grad_output.zeros()
 
 
 class EQ(Function):
     @staticmethod
     def forward(ctx: Context, a: Tensor, b: Tensor) -> Tensor:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        return a.f.eq_zip(a, b)
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, Tensor]:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        return grad_output.zeros(), grad_output.zeros()
 
 
 class IsClose(Function):
     @staticmethod
     def forward(ctx: Context, a: Tensor, b: Tensor) -> Tensor:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        return a.f.is_close_zip(a, b)
 
 
 class Permute(Function):
     @staticmethod
     def forward(ctx: Context, a: Tensor, order: Tensor) -> Tensor:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        order_data = [int(order[i]) for i in range(order.size)]
+        ctx.save_for_backward(a.shape)
+        tensor_data = a._tensor.permute(*order_data)
+        return minitorch.Tensor(tensor_data, backend=a.backend)
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, float]:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        (original_shape,) = ctx.saved_values
+        return (
+            minitorch.Tensor.make(
+                grad_output._tensor._storage, original_shape, backend=grad_output.backend
+            ),
+            0.0
+        )
 
 
 class View(Function):
@@ -360,7 +385,11 @@ def grad_central_difference(
     up[ind] = epsilon
     vals1 = [x if j != arg else x + up for j, x in enumerate(vals)]
     vals2 = [x if j != arg else x - up for j, x in enumerate(vals)]
-    delta: Tensor = f(*vals1).sum() - f(*vals2).sum()
+    a = f(*vals1)
+    b = f(*vals2)
+    a_sum = a.sum()
+    b_sum = b.sum()
+    delta: Tensor = a_sum - b_sum
 
     return delta[0] / (2.0 * epsilon)
 
@@ -375,13 +404,20 @@ def grad_check(f: Any, *vals: Tensor) -> None:
     err_msg = """
 
 Gradient check error for function %s.
+function code: %s.
 
-Input %s
+Input (vals) =  %s
+x %s
+Shape %s
+Grad %s
 
 Received derivative %f for argument %d and index %s,
 but was expecting derivative %f from central difference.
 
 """
+
+    import inspect
+    code = inspect.getsource(f)
 
     for i, x in enumerate(vals):
         ind = x._tensor.sample()
@@ -392,5 +428,5 @@ but was expecting derivative %f from central difference.
             check,
             1e-2,
             1e-2,
-            err_msg=err_msg % (f, vals, x.grad[ind], i, ind, check),
+            err_msg=err_msg % (f, code, vals, x, x.shape, x.grad, x.grad[ind], i, ind, check),
         )

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, Tuple
 
 from typing_extensions import Protocol
 
@@ -22,7 +22,12 @@ def central_difference(f: Any, *vals: Any, arg: int = 0, epsilon: float = 1e-6) 
     Returns:
         An approximation of $f'_i(x_0, \ldots, x_{n-1})$
     """
-    raise NotImplementedError("Need to include this file from past assignment.")
+    val = f(*vals)
+    vals_epsilon = list(vals)
+    vals_epsilon[arg] += epsilon
+    val_delta = f(*vals_epsilon)
+    f_prime = (val_delta - val) / epsilon
+    return f_prime
 
 
 variable_count = 1
@@ -60,7 +65,22 @@ def topological_sort(variable: Variable) -> Iterable[Variable]:
     Returns:
         Non-constant Variables in topological order starting from the right.
     """
-    raise NotImplementedError("Need to include this file from past assignment.")
+    queue = [variable]
+    sorted_vars = []
+    visited = set()
+
+    while queue:
+        var = queue[0]
+        queue.pop(0)
+        if var.unique_id not in visited:
+            if var.is_constant():
+                continue
+            visited.add(var.unique_id)
+            sorted_vars.append(var)
+            for parent in var.parents:
+                queue.append(parent)
+
+    return sorted_vars
 
 
 def backpropagate(variable: Variable, deriv: Any) -> None:
@@ -74,7 +94,20 @@ def backpropagate(variable: Variable, deriv: Any) -> None:
 
     No return. Should write to its results to the derivative values of each leaf through `accumulate_derivative`.
     """
-    raise NotImplementedError("Need to include this file from past assignment.")
+    vars = list(topological_sort(variable))
+    tracked_deriv: Dict[int, Any] = {variable.unique_id: deriv}
+
+    while vars:
+        var = vars[0]
+        vars.pop(0)
+        current_deriv = tracked_deriv[var.unique_id]
+        if var.is_leaf():
+            var.accumulate_derivative(current_deriv)
+        else:
+            for (input_var, deriv_out) in var.chain_rule(current_deriv):
+                tracked_deriv[input_var.unique_id] = (
+                    tracked_deriv.get(input_var.unique_id, 0.0) + deriv_out
+                )
 
 
 @dataclass

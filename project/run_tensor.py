@@ -21,7 +21,10 @@ class Network(minitorch.Module):
         self.layer3 = Linear(hidden_layers, 1)
 
     def forward(self, x):
-        raise NotImplementedError("Need to include this file from past assignment.")
+        backend: minitorch.TensorBackend = x.backend
+        m1 = backend.map_relu(self.layer1.forward(x))
+        m2 = backend.map_relu(self.layer2.forward(m1))
+        return backend.sigmoid_map(m2).sum()
 
 
 class Linear(minitorch.Module):
@@ -32,7 +35,25 @@ class Linear(minitorch.Module):
         self.out_size = out_size
 
     def forward(self, x):
-        raise NotImplementedError("Need to include this file from past assignment.")
+
+        # conv = [
+        #     minitorch.operators.sum(
+        #         minitorch.operators.zipWith(minitorch.operators.mul)(
+        #             [w.value for w in weights], inputs
+        #         )
+        #     )
+        #     for weights in self.weights
+        # ]
+        # result = minitorch.operators.addLists(conv, [b.value for b in self.bias])
+
+
+        backend: minitorch.TensorBackend = x.backend
+        conv =
+        return conv + self.bias
+
+        conv =
+        mid = minitorch.tensor_functions.MatMul
+        return mid + self.bias
 
 
 def default_log_fn(epoch, total_loss, correct, losses):

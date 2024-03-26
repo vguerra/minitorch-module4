@@ -39,10 +39,10 @@ dest = sys.argv[2]
 try:
     for file in files_to_move:
         print(f"Moving file : {file}")
-        shutil.copy(
-            os.path.join(grandparent_path, source, file),
-            os.path.join(grandparent_path, dest, file),
-        )
+        source_path = os.path.join(grandparent_path, source, file)
+        dest_path = os.path.join(grandparent_path, dest, file)
+        print(source_path, dest_path)
+        shutil.copy(source_path, dest_path)
     print(f"Finished moving {len(files_to_move)} files")
 except Exception:
     print(

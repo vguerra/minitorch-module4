@@ -3,7 +3,7 @@ from typing import Callable, Dict, Iterable, List, Tuple
 
 import numba
 import pytest
-from hypothesis import given, settings
+from hypothesis import given, settings, HealthCheck
 from hypothesis.strategies import DataObject, data, integers, lists, permutations
 
 import minitorch
@@ -20,7 +20,7 @@ one_arg, two_arg, red_arg = MathTestVariable._comp_testing()
 
 SimpleBackend = minitorch.TensorBackend(minitorch.SimpleOps)
 FastTensorBackend = minitorch.TensorBackend(minitorch.FastOps)
-shared: Dict[str, TensorBackend] = {"fast": FastTensorBackend}
+shared: Dict[str, TensorBackend] = {"fast": FastTensorBackend, "simple": SimpleBackend}
 
 # ## Task 3.1
 backend_tests = [pytest.param("fast", marks=pytest.mark.task3_1)]
@@ -64,7 +64,8 @@ def test_one_args(
     name, base_fn, tensor_fn = fn
     t2 = tensor_fn(t1)
     for ind in t2._tensor.indices():
-        assert_close(t2[ind], base_fn(t1[ind]))
+        a, b = t2[ind], base_fn(t1[ind])
+        assert_close(a, b)
 
 
 @given(data())
@@ -93,6 +94,7 @@ def test_one_derivative(
     data: DataObject,
 ) -> None:
     "Run backward for all one arg functions above."
+    # t1 = data.draw(tensors(backend=shared[backend]))
     t1 = data.draw(tensors(backend=shared[backend]))
     name, _, tensor_fn = fn
     grad_check(tensor_fn, t1)
@@ -131,7 +133,7 @@ def test_reduce(
 if numba.cuda.is_available():
 
     @pytest.mark.task3_3
-    def test_sum_practice() -> None:
+    def test_sum_practice1() -> None:
         x = [random.random() for i in range(16)]
         b = minitorch.tensor(x)
         s = b.sum()[0]
@@ -214,6 +216,7 @@ if numba.cuda.is_available():
         for i in range(32):
             for j in range(32):
                 assert_close(z[i, j], z2._storage[32 * i + j])
+
 
     @pytest.mark.task3_4
     def test_mul_practice3() -> None:
@@ -300,12 +303,11 @@ if numba.cuda.is_available():
         for b in range(2):
             for i in range(size_a):
                 for j in range(size_b):
-                    print(i, j)
                     assert_close(z[b, i, j], z2[b, i, j])
 
 
 @given(data())
-@settings(max_examples=25)
+@settings(max_examples=25, suppress_health_check=[HealthCheck.data_too_large])
 @pytest.mark.parametrize("fn", two_arg)
 @pytest.mark.parametrize("backend", backend_tests)
 def test_two_grad_broadcast(
@@ -355,7 +357,6 @@ def test_mm2() -> None:
 # ## Task 3.2 and 3.4
 
 # Matrix Multiplication
-
 
 @given(data())
 @pytest.mark.parametrize("backend", matmul_tests)

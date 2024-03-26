@@ -1,4 +1,5 @@
 import random
+import time
 
 import numba
 
@@ -6,12 +7,13 @@ import minitorch
 
 datasets = minitorch.datasets
 FastTensorBackend = minitorch.TensorBackend(minitorch.FastOps)
+
 if numba.cuda.is_available():
     GPUBackend = minitorch.TensorBackend(minitorch.CudaOps)
 
 
-def default_log_fn(epoch, total_loss, correct, losses):
-    print("Epoch ", epoch, " loss ", total_loss, "correct", correct)
+def default_log_fn(epoch, total_loss, correct, losses, inference_time):
+    print("Epoch ", epoch, " loss ", total_loss, "correct", correct, "inference time (s)", inference_time)
 
 
 def RParam(*shape, backend):
@@ -29,7 +31,9 @@ class Network(minitorch.Module):
         self.layer3 = Linear(hidden, 1, backend)
 
     def forward(self, x):
-        raise NotImplementedError("Need to include this file from past assignment.")
+        t = self.layer1(x).relu()
+        t = self.layer2(t).relu()
+        return self.layer3(t).sigmoid()
 
 
 class Linear(minitorch.Module):
@@ -42,7 +46,7 @@ class Linear(minitorch.Module):
         self.out_size = out_size
 
     def forward(self, x):
-        raise NotImplementedError("Need to include this file from past assignment.")
+        return x @ self.weights.value + self.bias.value
 
 
 class FastTrain:
@@ -91,10 +95,12 @@ class FastTrain:
             if epoch % 10 == 0 or epoch == max_epochs:
                 X = minitorch.tensor(data.X, backend=self.backend)
                 y = minitorch.tensor(data.y, backend=self.backend)
+                s_time = time.time()
                 out = self.model.forward(X).view(y.shape[0])
+                epoch_time = time.time() - s_time
                 y2 = minitorch.tensor(data.y)
                 correct = int(((out.detach() > 0.5) == y2).sum()[0])
-                log_fn(epoch, total_loss, correct, losses)
+                log_fn(epoch, total_loss, correct, losses, epoch_time)
 
 
 if __name__ == "__main__":
