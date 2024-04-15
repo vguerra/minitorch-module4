@@ -10,6 +10,7 @@ from .tensor_data import (
     Index,
     Shape,
     Strides,
+    Storage,
     broadcast_index,
     index_to_position,
     to_index,
@@ -25,14 +26,14 @@ broadcast_index = njit(inline="always")(broadcast_index)
 
 
 def _tensor_conv1d(
-    out: Tensor,
+    out: Storage,
     out_shape: Shape,
     out_strides: Strides,
     out_size: int,
-    input: Tensor,
+    input: Storage,
     input_shape: Shape,
     input_strides: Strides,
-    weight: Tensor,
+    weight: Storage,
     weight_shape: Shape,
     weight_strides: Strides,
     reverse: bool,
@@ -80,8 +81,19 @@ def _tensor_conv1d(
     s1 = input_strides
     s2 = weight_strides
 
-    # TODO: Implement for Task 4.1.
-    raise NotImplementedError("Need to implement for Task 4.1")
+    for out_i in prange(out.size):
+        o_idx = np.zeros_like(out_shape)
+        to_index(out_i, out_shape, o_idx)
+        o_pos = index_to_position(o_idx, out_strides)
+
+        b, o_channel, init_s = o_idx[0], o_idx[1], o_idx[2]
+
+        for i_channel in prange(in_channels):
+            for k in prange(kw):
+                if init_s + k < width:
+                    i_pos = b * s1[0] + i_channel * s1[1] + (init_s + k) * s1[2]
+                    w_pos = o_channel * s2[0] + i_channel * s2[1] + k * s2[2]
+                    out[o_pos] = out[o_pos] + input[i_pos] * weight[w_pos]
 
 
 tensor_conv1d = njit(parallel=True)(_tensor_conv1d)
@@ -95,11 +107,11 @@ class Conv1dFun(Function):
 
         Args:
             ctx : Context
-            input : batch x in_channel x h x w
-            weight : out_channel x in_channel x kh x kw
+            input : batch x in_channel x w
+            weight : out_channel x in_channel x kw
 
         Returns:
-            batch x out_channel x h x w
+            batch x out_channel x w
         """
         ctx.save_for_backward(input, weight)
         batch, in_channels, w = input.shape
