@@ -81,18 +81,23 @@ def _tensor_conv1d(
     s1 = input_strides
     s2 = weight_strides
 
+    r = int(reverse)
     for out_i in prange(out.size):
         o_idx = np.zeros_like(out_shape)
         to_index(out_i, out_shape, o_idx)
         o_pos = index_to_position(o_idx, out_strides)
 
         b, o_channel, init_s = o_idx[0], o_idx[1], o_idx[2]
+        init_s = (1 - r) * o_idx[2] + r * (o_idx[2] - kw + 1)
 
         for i_channel in prange(in_channels):
+            base_i = b * s1[0] + i_channel * s1[1]
+            base_w = o_channel * s2[0] + i_channel * s2[1]
             for k in prange(kw):
-                if init_s + k < width:
-                    i_pos = b * s1[0] + i_channel * s1[1] + (init_s + k) * s1[2]
-                    w_pos = o_channel * s2[0] + i_channel * s2[1] + k * s2[2]
+                input_offset = init_s + k
+                if input_offset < width and input_offset >= 0:
+                    i_pos = base_i + input_offset * s1[2]
+                    w_pos = base_w + ((1 - r) * k + r * (kw - k - 1)) * s2[2]
                     out[o_pos] = out[o_pos] + input[i_pos] * weight[w_pos]
 
 
