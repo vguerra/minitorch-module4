@@ -87,7 +87,7 @@ def _tensor_conv1d(
         to_index(out_i, out_shape, o_idx)
         o_pos = index_to_position(o_idx, out_strides)
 
-        b, o_channel, init_s = o_idx[0], o_idx[1], o_idx[2]
+        b, o_channel = o_idx[0], o_idx[1]
         init_s = (1 - r) * o_idx[2] + r * (o_idx[2] - kw + 1)
 
         for i_channel in prange(in_channels):
@@ -163,14 +163,14 @@ conv1d = Conv1dFun.apply
 
 
 def _tensor_conv2d(
-    out: Tensor,
+    out: Storage,
     out_shape: Shape,
     out_strides: Strides,
     out_size: int,
-    input: Tensor,
+    input: Storage,
     input_shape: Shape,
     input_strides: Strides,
-    weight: Tensor,
+    weight: Storage,
     weight_shape: Shape,
     weight_strides: Strides,
     reverse: bool,
@@ -223,8 +223,26 @@ def _tensor_conv2d(
     s10, s11, s12, s13 = s1[0], s1[1], s1[2], s1[3]
     s20, s21, s22, s23 = s2[0], s2[1], s2[2], s2[3]
 
-    # TODO: Implement for Task 4.2.
-    raise NotImplementedError("Need to implement for Task 4.2")
+    r = int(reverse)
+    for out_i in prange(out.size):
+        o_idx = np.zeros_like(out_shape)
+        to_index(out_i, out_shape, o_idx)
+        o_pos = index_to_position(o_idx, out_strides)
+
+        b, o_channel = o_idx[0], o_idx[1]
+        init_h = (1 - r) * o_idx[2] + r * (o_idx[2] - kh + 1)
+        init_w = (1 - r) * o_idx[3] + r * (o_idx[3] - kw + 1)
+
+        for i_channel in prange(in_channels):
+            base_i = b * s10 + i_channel * s11
+            base_w = o_channel * s20 + i_channel * s21
+            for h in prange(kh): # rows
+                for w in prange(kw): # cols
+                    if (init_h + h) < height and (init_h + h) >= 0 and (init_w + w) < weight and (init_w + w) >= 0:
+                        i_pos = base_i + (init_h + h) * s12 + (init_w + w) * s13
+                        w_pos = base_w + ((1 - r) * h + r * (kh - h - 1)) * s22 + ((1 - r) * w + r * (kw - w - 1)) * s23
+                        # w_pos = base_w + ((1 - r) * k + r * (kw - k - 1)) * s2[2]
+                        out[o_pos] = out[o_pos] + input[i_pos] * weight[w_pos]
 
 
 tensor_conv2d = njit(parallel=True, fastmath=True)(_tensor_conv2d)
