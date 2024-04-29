@@ -6,8 +6,6 @@ from minitorch import Tensor
 
 from .tensor_strategies import tensors
 
-import torch
-
 @pytest.mark.task4_1
 def test_conv1d_simple() -> None:
     t = minitorch.tensor([0, 1, 2, 3]).view(1, 1, 4)
