@@ -68,15 +68,15 @@ def argmax(input: Tensor, dim: int) -> Tensor:
 class Max(Function):
     @staticmethod
     def forward(ctx: Context, input: Tensor, dim: Tensor) -> Tensor:
-        "Forward of max should be max reduction"
-        # TODO: Implement for Task 4.4.
-        raise NotImplementedError("Need to implement for Task 4.4")
+        int_dim = int(dim.item())
+        ctx.save_for_backward(argmax(input, int_dim))
+        return max_reduce(input, int_dim)
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, float]:
         "Backward of max should be argmax (see above)"
-        # TODO: Implement for Task 4.4.
-        raise NotImplementedError("Need to implement for Task 4.4")
+        (argmax,) = ctx.saved_values
+        return grad_output * argmax, 0.0
 
 
 def max(input: Tensor, dim: int) -> Tensor:
@@ -98,8 +98,9 @@ def softmax(input: Tensor, dim: int) -> Tensor:
     Returns:
         softmax tensor
     """
-    # TODO: Implement for Task 4.4.
-    raise NotImplementedError("Need to implement for Task 4.4")
+    m = input - max(input, dim)
+    e = m.exp()
+    return e / e.sum(dim)
 
 
 def logsoftmax(input: Tensor, dim: int) -> Tensor:
@@ -117,8 +118,10 @@ def logsoftmax(input: Tensor, dim: int) -> Tensor:
     Returns:
          log of softmax tensor
     """
-    # TODO: Implement for Task 4.4.
-    raise NotImplementedError("Need to implement for Task 4.4")
+    max_input = max(input, dim)
+    e = (input - max_input).exp()
+    sum_e = e.sum(dim).log() + max_input
+    return input - sum_e
 
 
 def maxpool2d(input: Tensor, kernel: Tuple[int, int]) -> Tensor:
@@ -133,8 +136,8 @@ def maxpool2d(input: Tensor, kernel: Tuple[int, int]) -> Tensor:
         Tensor : pooled tensor
     """
     batch, channel, height, width = input.shape
-    # TODO: Implement for Task 4.4.
-    raise NotImplementedError("Need to implement for Task 4.4")
+    tiled, new_height, new_width = tile(input, kernel)
+    return max(tiled, 4).view(batch, channel, new_height, new_width)
 
 
 def dropout(input: Tensor, rate: float, ignore: bool = False) -> Tensor:
@@ -149,5 +152,10 @@ def dropout(input: Tensor, rate: float, ignore: bool = False) -> Tensor:
     Returns:
         tensor with randoom positions dropped out
     """
-    # TODO: Implement for Task 4.4.
-    raise NotImplementedError("Need to implement for Task 4.4")
+    if ignore:
+        return input
+
+    rand_values = rand(input.shape, input.backend, requires_grad=False)
+    rand_gate = rand_values > rate
+    return input * rand_gate
+
