@@ -34,8 +34,8 @@ class Conv1d(minitorch.Module):
         self.bias = RParam(1, out_channels, 1)
 
     def forward(self, input):
-        # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        conv = minitorch.conv1d(input, self.weights.value)
+        return conv + self.bias.value
 
 
 class CNNSentimentKim(minitorch.Module):
@@ -61,15 +61,41 @@ class CNNSentimentKim(minitorch.Module):
     ):
         super().__init__()
         self.feature_map_size = feature_map_size
-        # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        self.embeddomg_size = embedding_size
+        self.filter_sizes = filter_sizes
+        self.dropout = dropout
+        self.num_filters = len(filter_sizes)
+        self.flatten_len = self.num_filters * feature_map_size
+
+        self.conv_layers = [Conv1d(embedding_size, feature_map_size, filter_size) for filter_size in filter_sizes]
+
+        self.concat_tensors = [minitorch.tensor(
+            [1 if i == filter_idx else 0 for i in range(self.num_filters)], backend=BACKEND
+        ).view(1, 1, self.num_filters) for filter_idx in range(self.num_filters)]
+
+        self.linear_layer = Linear(self.num_filters * feature_map_size, 1)
+
+
 
     def forward(self, embeddings):
         """
         embeddings tensor: [batch x sentence length x embedding dim]
         """
-        # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        batch, s_length, emb_dim = embeddings.shape
+        emb_permute:minitorch.Tensor = embeddings.permute(0, 2, 1)
+        mid_layers = [conv1d_layer(emb_permute) for conv1d_layer in self.conv_layers]
+        mid_max_layers = [minitorch.max(mid_layer, 2) for mid_layer in mid_layers]
+        concat_layer = [c * m for c, m in zip(self.concat_tensors, mid_max_layers)]
+        sum_layer = concat_layer[0] + concat_layer[1] + concat_layer[2]
+
+        end_layer = self.linear_layer(sum_layer.view(batch, self.flatten_len)).relu()
+        out_layer = minitorch.dropout(end_layer, self.dropout, not self.training)
+
+        return out_layer.sigmoid()
+
+        # raise Exception("Stop here")
+
+
 
 
 # Evaluation helper methods
@@ -165,6 +191,9 @@ class SentenceSentimentTrain:
                 # Update
                 optim.step()
 
+            # print("parameters")
+            # print(self.model.parameters()[1])
+
             # Evaluate on validation set at the end of the epoch
             validation_predictions = []
             if data_val is not None:
@@ -256,7 +285,7 @@ def encode_sentiment_data(dataset, pretrained_embeddings, N_train, N_val=0):
 if __name__ == "__main__":
     train_size = 450
     validation_size = 100
-    learning_rate = 0.01
+    learning_rate = 0.005 # 0.01
     max_epochs = 250
 
     (X_train, y_train), (X_val, y_val) = encode_sentiment_data(
@@ -266,7 +295,7 @@ if __name__ == "__main__":
         validation_size,
     )
     model_trainer = SentenceSentimentTrain(
-        CNNSentimentKim(feature_map_size=100, filter_sizes=[3, 4, 5], dropout=0.25)
+        CNNSentimentKim(feature_map_size=100, embedding_size=50, filter_sizes=[3, 4, 5], dropout=0.25)
     )
     model_trainer.train(
         (X_train, y_train),

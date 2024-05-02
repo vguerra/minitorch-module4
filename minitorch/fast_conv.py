@@ -121,7 +121,7 @@ class Conv1dFun(Function):
         ctx.save_for_backward(input, weight)
         batch, in_channels, w = input.shape
         out_channels, in_channels2, kw = weight.shape
-        assert in_channels == in_channels2
+        assert in_channels == in_channels2, f"mismatch on input in_channels ({in_channels}) and weight in_channels({in_channels2})"
 
         # Run convolution
         output = input.zeros((batch, out_channels, w))
